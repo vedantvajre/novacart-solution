@@ -264,15 +264,39 @@ class TestCustomerRow:
         """
         assert set(BronzeCustomerRow.model_fields).issubset(set(CustomerRow.model_fields))
 
-    def test_email_normalised_to_lowercase(self):
-        """Email must be lowercased."""
-        row = CustomerRow(**self._valid(email="Alice@Example.COM"))
-        assert row.email == "alice@example.com"
+    def test_email_domain_normalised_to_lowercase(self):
+        """
+        EmailStr must normalise the domain part to lowercase.
 
-    def test_bad_email_rejected(self):
-        """Email without C{@} must raise L{ValidationError}."""
+        Per RFC 5321 the local part (before C{@}) is technically
+        case-sensitive, so C{EmailStr} preserves its case.  Only the
+        domain is guaranteed to be lowercased.
+        """
+        row = CustomerRow(**self._valid(email="Alice@Example.COM"))
+        assert row.email.split("@")[1] == "example.com"
+
+    @pytest.mark.parametrize(
+        "bad_email",
+        [
+            "not-an-email",  # no @ at all
+            "@",  # bare @ — previously passed the weak check
+            "a@",  # missing domain — previously passed
+            "@b",  # missing local part — previously passed
+            "alice @example.com",  # space in local part
+            "alice@example",  # missing TLD
+            "",  # empty string
+        ],
+    )
+    def test_invalid_emails_rejected(self, bad_email: str):
+        """
+        EmailStr must reject malformed addresses that the old C{@}-presence
+        check silently passed.
+
+        @param bad_email: An invalid email string that must raise
+                          L{ValidationError}.
+        """
         with pytest.raises(ValidationError):
-            CustomerRow(**self._valid(email="not-an-email"))
+            CustomerRow(**self._valid(email=bad_email))
 
     def test_tier_defaults_to_standard(self):
         """Omitting C{tier} at Silver should default to C{"standard"}."""

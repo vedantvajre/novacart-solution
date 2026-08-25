@@ -28,7 +28,7 @@ from __future__ import annotations
 from datetime import date, datetime
 
 import pandas as pd
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
 
 from src.utils.exceptions import SchemaError
 
@@ -200,30 +200,17 @@ class CustomerRow(BronzeCustomerRow):
     Inherits field names from L{BronzeCustomerRow} and narrows types.
 
     @ivar signup_date: Parsed as a C{date} object.
-    @ivar email:       Validated for C{@} presence; normalised to
-                       lowercase.  (Full RFC-5322 validation is tracked
-                       under M-2.)
+    @ivar email:       RFC-5322 compliant email address validated and
+                       normalised to lowercase by Pydantic's C{EmailStr}
+                       type.  Replaces the trivial C{@}-presence check.
     @ivar tier:        Defaults to C{"standard"} when absent.
     """
 
     model_config = ConfigDict(strict=False, coerce_numbers_to_str=False)
 
+    email: EmailStr
     signup_date: date  # type: ignore[assignment]
     tier: str | None = "standard"
-
-    @field_validator("email")
-    @classmethod
-    def email_has_at(cls, v: str) -> str:
-        """
-        Require an C{@} character and normalise the email to lowercase.
-
-        @param v: Raw email string.
-        @raises ValueError: If C{v} does not contain C{@}.
-        @return: Lowercase email string.
-        """
-        if "@" not in v:
-            raise ValueError(f"invalid email: {v}")
-        return v.lower()
 
 
 class ProductRow(BronzeProductRow):
