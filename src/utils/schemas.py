@@ -1,6 +1,7 @@
 """Pydantic schema contracts for Bronze → Silver validation."""
 from __future__ import annotations
 from datetime import date
+from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, field_validator, ConfigDict
 
@@ -63,7 +64,7 @@ class ProductRow(BaseModel):
     category: str
     unit_cost: float
     supplier_id: str
-    updated_at: str  # ISO string from SQLite
+    updated_at: datetime
 
     @field_validator("unit_cost")
     @classmethod
