@@ -77,41 +77,41 @@ def build_dim_customer(
         return out_path
 
     existing = pd.read_parquet(out_path)
-    current = existing[existing["_current"] == True].copy()
+    current = existing[existing["_current"] == True][["customer_id", "_row_hash"]].copy()
 
-    new_rows = []
+    # Compute hashes for all incoming rows in one vectorised pass
+    incoming["_new_hash"] = incoming.apply(
+        lambda r: _row_hash(r, scd2_fields), axis=1
+    )
 
-    for _, inc_row in incoming.iterrows():
-        cid = inc_row["customer_id"]
-        new_hash = _row_hash(inc_row, scd2_fields)
-        match = current[current["customer_id"] == cid]
+    # Single merge — O(n log n) join instead of O(n×m) per-row filter
+    merged = incoming.merge(current, on="customer_id", how="left")
 
-        if match.empty:
-            # Brand-new customer
-            r = inc_row.to_dict()
-            r.update({"_eff_start": today, "_eff_end": _HIGH_DATE,
-                       "_current": True, "_row_hash": new_hash})
-            new_rows.append(r)
-        elif match.iloc[0]["_row_hash"] != new_hash:
-            # SCD2 — expire old row, open new row
-            old_idx = match.index[0]
-            existing.at[old_idx, "_eff_end"] = today
-            existing.at[old_idx, "_current"] = False
+    brand_new = merged["_row_hash"].isna()
+    changed   = ~brand_new & (merged["_new_hash"] != merged["_row_hash"])
 
-            r = inc_row.to_dict()
-            r.update({"_eff_start": today, "_eff_end": _HIGH_DATE,
-                       "_current": True, "_row_hash": new_hash})
-            new_rows.append(r)
-        # else: unchanged — keep existing row as-is
+    # Expire changed rows in existing via index lookup — one vectorised assignment
+    changed_ids = merged.loc[changed, "customer_id"].values
+    expire_mask = existing["customer_id"].isin(changed_ids) & (existing["_current"] == True)
+    existing.loc[expire_mask, "_eff_end"] = today
+    existing.loc[expire_mask, "_current"] = False
+
+    # Build new/replacement rows for brand-new and changed customers
+    to_open = merged.loc[brand_new | changed].copy()
+    to_open["_eff_start"] = today
+    to_open["_eff_end"]   = _HIGH_DATE
+    to_open["_current"]   = True
+    to_open["_row_hash"]  = to_open["_new_hash"]
+    to_open = to_open.drop(columns=["_new_hash"])
 
     frames = [existing]
-    if new_rows:
-        frames.append(pd.DataFrame(new_rows))
+    if not to_open.empty:
+        frames.append(to_open)
 
     result = pd.concat(frames, ignore_index=True)
     result.to_parquet(out_path, index=False)
     log_event(logger, "INFO", "dim_customer_written",
-              rows=len(result), new=len(new_rows))
+              rows=len(result), new=len(to_open))
     return out_path
 
 
