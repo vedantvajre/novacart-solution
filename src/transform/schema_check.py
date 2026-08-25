@@ -2,6 +2,7 @@
 from __future__ import annotations
 import logging
 from src.utils.exceptions import SchemaError
+from src.utils.logging_setup import log_event
 
 
 def check_schema(
@@ -23,9 +24,8 @@ def check_schema(
     missing = expected - actual
 
     if added:
-        logger.warning(
-            f"[schema_drift] {source_name}: unexpected columns {sorted(added)} — ignoring extras"
-        )
+        log_event(logger, "warning", "schema_drift",
+                  source=source_name, unexpected_columns=sorted(added))
 
     if missing:
         raise SchemaError(
