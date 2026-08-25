@@ -91,9 +91,7 @@ def run_one_date(date_str: str, config: Config) -> dict:
 
         # ── Gold ──────────────────────────────────────────────────────────────
         stage("dim_product", lambda: build_dim_product(config.silver, config.gold, logger))
-        _scd2_fields: list[str] = config.gold_cfg.get(  # type: ignore[assignment]
-            "scd2_track_fields", ["city", "country", "email"]
-        )
+        _scd2_fields = config.gold_cfg.scd2_track_fields
         stage(
             "dim_customer",
             lambda: build_dim_customer(config.silver, config.gold, _scd2_fields, logger),
