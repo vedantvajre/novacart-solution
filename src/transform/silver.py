@@ -109,9 +109,7 @@ def build_silver_customers(
         return silver_dir / "customers" / "data.parquet"
 
     df = pd.read_parquet(src)
-    df = _validate_df(
-        df, CustomerRow, "customer_id", quarantine_dir, logger, "customers"
-    )
+    df = _validate_df(df, CustomerRow, "customer_id", quarantine_dir, logger, "customers")
 
     out_dir = silver_dir / "customers"
     out_dir.mkdir(parents=True, exist_ok=True)

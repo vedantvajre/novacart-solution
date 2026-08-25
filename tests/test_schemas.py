@@ -262,9 +262,7 @@ class TestCustomerRow:
         L{CustomerRow} must inherit every field declared in
         L{BronzeCustomerRow}.
         """
-        assert set(BronzeCustomerRow.model_fields).issubset(
-            set(CustomerRow.model_fields)
-        )
+        assert set(BronzeCustomerRow.model_fields).issubset(set(CustomerRow.model_fields))
 
     def test_email_domain_normalised_to_lowercase(self):
         """

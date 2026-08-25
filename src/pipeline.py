@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import argparse
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from src.ingest.customers import ingest_customers
@@ -33,18 +33,18 @@ from src.utils.state import StateManager
 def run_one_date(date_str: str, config: Config) -> dict:
     logger = get_logger("novacart", config.logs)
     state = StateManager(config.state)
-    started_at = datetime.now(timezone.utc)
+    started_at = datetime.now(UTC)
     stages: list[dict] = []
 
     def stage(name: str, fn):
-        t0 = datetime.now(timezone.utc)
+        t0 = datetime.now(UTC)
         try:
             fn()
             stages.append(
                 {
                     "stage": name,
                     "status": "OK",
-                    "duration_sec": (datetime.now(timezone.utc) - t0).total_seconds(),
+                    "duration_sec": (datetime.now(UTC) - t0).total_seconds(),
                 }
             )
         except Exception as exc:
@@ -53,7 +53,7 @@ def run_one_date(date_str: str, config: Config) -> dict:
                     "stage": name,
                     "status": "FAIL",
                     "error": str(exc),
-                    "duration_sec": (datetime.now(timezone.utc) - t0).total_seconds(),
+                    "duration_sec": (datetime.now(UTC) - t0).total_seconds(),
                 }
             )
             raise
@@ -65,9 +65,7 @@ def run_one_date(date_str: str, config: Config) -> dict:
         # ── Bronze ────────────────────────────────────────────────────────────
         stage(
             "ingest_orders",
-            lambda: ingest_orders(
-                date_str, config.landing_orders, config.bronze, logger
-            ),
+            lambda: ingest_orders(date_str, config.landing_orders, config.bronze, logger),
         )
         stage(
             "ingest_customers",
@@ -91,9 +89,7 @@ def run_one_date(date_str: str, config: Config) -> dict:
         )
         stage(
             "silver_customers",
-            lambda: build_silver_customers(
-                config.bronze, config.silver, config.quarantine, logger
-            ),
+            lambda: build_silver_customers(config.bronze, config.silver, config.quarantine, logger),
         )
         # H-1: pass the exact Bronze path returned by ingest_products so Silver
         # reads the same partitioned file that was just written.
@@ -108,15 +104,11 @@ def run_one_date(date_str: str, config: Config) -> dict:
         )
 
         # ── Gold ──────────────────────────────────────────────────────────────
-        stage(
-            "dim_product", lambda: build_dim_product(config.silver, config.gold, logger)
-        )
+        stage("dim_product", lambda: build_dim_product(config.silver, config.gold, logger))
         _scd2_fields = config.gold_cfg.scd2_track_fields
         stage(
             "dim_customer",
-            lambda: build_dim_customer(
-                config.silver, config.gold, _scd2_fields, logger
-            ),
+            lambda: build_dim_customer(config.silver, config.gold, _scd2_fields, logger),
         )
         stage(
             "fact_orders",
@@ -139,7 +131,7 @@ def run_one_date(date_str: str, config: Config) -> dict:
             new_watermark=pending_watermark,
         )
 
-    finished_at = datetime.now(timezone.utc)
+    finished_at = datetime.now(UTC)
     metadata = {
         "date": date_str,
         "status": status,
@@ -162,16 +154,12 @@ def run_one_date(date_str: str, config: Config) -> dict:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="NovaCart ETL pipeline")
     parser.add_argument("--date", required=True, help="Processing date YYYY-MM-DD")
-    parser.add_argument(
-        "--backfill", type=int, default=0, help="Also process N days before --date"
-    )
+    parser.add_argument("--backfill", type=int, default=0, help="Also process N days before --date")
     parser.add_argument("--config", default="config/pipeline.yaml")
     args = parser.parse_args(argv)
 
     config = Config.load(args.config)
-    target = (
-        datetime.strptime(args.date, "%Y-%m-%d").replace(tzinfo=timezone.utc).date()
-    )
+    target = datetime.strptime(args.date, "%Y-%m-%d").replace(tzinfo=UTC).date()
     dates = [target - timedelta(days=i) for i in range(args.backfill, -1, -1)]
 
     failures = 0

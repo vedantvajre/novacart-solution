@@ -115,7 +115,5 @@ def ingest_customers(
     out_path = out_dir / "data.parquet"
     df.to_parquet(out_path, index=False)
 
-    log_event(
-        logger, "INFO", "customers_bronze_written", path=str(out_path), rows=len(df)
-    )
+    log_event(logger, "INFO", "customers_bronze_written", path=str(out_path), rows=len(df))
     return out_path

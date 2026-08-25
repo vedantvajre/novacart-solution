@@ -184,9 +184,7 @@ def build_dim_customer(
         incoming["_eff_start"] = today
         incoming["_eff_end"] = _HIGH_DATE
         incoming["_current"] = True
-        incoming["_row_hash"] = incoming.apply(
-            lambda r: _row_hash(r, scd2_fields), axis=1
-        )
+        incoming["_row_hash"] = incoming.apply(lambda r: _row_hash(r, scd2_fields), axis=1)
         assert_gold_schema(incoming, _DIM_CUSTOMER_SCHEMA, "dim_customer")
         incoming.to_parquet(out_path, index=False)
         log_event(logger, "INFO", "dim_customer_initial_load", rows=len(incoming))
@@ -225,9 +223,7 @@ def build_dim_customer(
     result = pd.concat(frames, ignore_index=True)
     assert_gold_schema(result, _DIM_CUSTOMER_SCHEMA, "dim_customer")
     result.to_parquet(out_path, index=False)
-    log_event(
-        logger, "INFO", "dim_customer_written", rows=len(result), new=len(to_open)
-    )
+    log_event(logger, "INFO", "dim_customer_written", rows=len(result), new=len(to_open))
     return out_path
 
 
