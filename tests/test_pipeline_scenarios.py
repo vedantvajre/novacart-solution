@@ -5,6 +5,8 @@ Run with: pytest -v
 
 from __future__ import annotations
 
+import csv
+
 import pandas as pd
 import pytest
 
@@ -147,8 +149,6 @@ def test_bad_rows_dont_reach_gold(config: Config):
 def test_additive_drift_succeeds(config: Config):
     """Extra column in source → pipeline continues, column ignored."""
     path = config.landing_orders / f"orders_{DATE}.csv"
-    import csv
-
     with path.open("w", newline="") as f:
         w = csv.writer(f)
         w.writerow(
@@ -173,8 +173,6 @@ def test_additive_drift_succeeds(config: Config):
 
 def test_additive_drift_data_still_lands(config: Config):
     path = config.landing_orders / f"orders_{DATE}.csv"
-    import csv
-
     with path.open("w", newline="") as f:
         w = csv.writer(f)
         w.writerow(
@@ -204,8 +202,6 @@ def test_additive_drift_data_still_lands(config: Config):
 def test_subtractive_drift_fails(config: Config):
     """Missing required column → pipeline stage fails."""
     path = config.landing_orders / f"orders_{DATE}.csv"
-    import csv
-
     with path.open("w", newline="") as f:
         w = csv.writer(f)
         # unit_price is missing
@@ -220,8 +216,6 @@ def test_subtractive_drift_fails(config: Config):
 
 def test_subtractive_drift_error_message(config: Config):
     path = config.landing_orders / f"orders_{DATE}.csv"
-    import csv
-
     with path.open("w", newline="") as f:
         w = csv.writer(f)
         w.writerow(["order_id", "customer_id", "order_date", "quantity", "status"])

@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 import sqlite3
 from pathlib import Path
 
 import pytest
+import yaml
 
 from src.utils.config import Config
 
@@ -44,16 +46,12 @@ def tmp_project(tmp_path: Path) -> Path:
         "silver": {"min_order_amount": 0.0, "max_order_amount": 100000.0},
         "gold": {"scd2_track_fields": ["city", "country", "email"]},
     }
-    import yaml
-
     (tmp_path / "config" / "pipeline.yaml").write_text(yaml.dump(cfg))
     return tmp_path
 
 
 @pytest.fixture()
 def config(tmp_project: Path) -> Config:
-    import os
-
     old = os.getcwd()
     os.chdir(tmp_project)
     yield Config.load("config/pipeline.yaml")
