@@ -20,17 +20,25 @@ def _validate_df(
     logger: logging.Logger,
     source_name: str,
 ) -> pd.DataFrame:
-    """Validate each row with Pydantic. Good rows → Silver, bad rows → quarantine."""
-    good, bad = [], []
-    for _, row in df.iterrows():
+    """Validate each row with Pydantic. Good rows → Silver, bad rows → quarantine.
+
+    Uses model.model_validate() over a list comprehension rather than iterrows(),
+    tracking good row indices and collecting bad row dicts only on failure.
+    This avoids constructing a Python Series object per row on the happy path.
+    """
+    good_indices: list[int] = []
+    bad: list[dict] = []
+
+    records = df.to_dict(orient="records")
+    for i, record in enumerate(records):
         try:
-            model(**row.to_dict())
-            good.append(row)
+            model.model_validate(record)
+            good_indices.append(i)
         except (ValidationError, Exception) as exc:
-            row_dict = row.to_dict()
-            row_dict["_quarantine_reason"] = str(exc)
-            row_dict["_quarantined_at"] = datetime.now(timezone.utc).isoformat()
-            bad.append(row_dict)
+            bad_record = record.copy()
+            bad_record["_quarantine_reason"] = str(exc)
+            bad_record["_quarantined_at"] = datetime.now(timezone.utc).isoformat()
+            bad.append(bad_record)
 
     if bad:
         q_dir = quarantine_path / source_name
@@ -39,7 +47,7 @@ def _validate_df(
         pd.DataFrame(bad).to_parquet(q_dir / f"{ts}.parquet", index=False)
         log_event(logger, "WARNING", f"{source_name}_quarantined", count=len(bad))
 
-    result = pd.DataFrame(good) if good else pd.DataFrame(columns=df.columns)
+    result = df.iloc[good_indices].reset_index(drop=True) if good_indices else pd.DataFrame(columns=df.columns)
 
     # Deduplicate on primary key — keep last occurrence
     if primary_key in result.columns and not result.empty:
