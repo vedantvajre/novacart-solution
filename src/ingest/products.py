@@ -23,10 +23,13 @@ def ingest_products(
     bronze_dir: Path,
     state: StateManager,
     logger: logging.Logger,
-) -> Path:
+) -> tuple[Path, str | None]:
     """
     Incrementally load only rows newer than the stored watermark.
-    Advances the watermark after a successful write.
+
+    Returns (out_path, pending_watermark). The caller is responsible for
+    committing the pending watermark to state only after the full pipeline
+    run succeeds (two-phase commit pattern).
     """
     if not db_path.exists():
         raise IngestionError(f"products DB not found: {db_path}")
@@ -50,7 +53,7 @@ def ingest_products(
         log_event(logger, "INFO", "products_no_new_rows")
         out_dir = bronze_dir / "products"
         out_dir.mkdir(parents=True, exist_ok=True)
-        return out_dir / "data.parquet"
+        return out_dir / "data.parquet", None
 
     check_schema(list(df.columns), EXPECTED_COLUMNS, "products", logger)
 
@@ -62,7 +65,5 @@ def ingest_products(
     df.to_parquet(out_path, index=False)
 
     new_watermark = str(df["updated_at"].max())
-    state.set_watermark(WATERMARK_KEY, new_watermark)
-    log_event(logger, "INFO", "products_watermark_advanced", new_watermark=new_watermark)
 
-    return out_path
+    return out_path, new_watermark

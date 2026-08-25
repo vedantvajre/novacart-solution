@@ -15,7 +15,7 @@ from src.utils.logging_setup import get_logger, log_event
 from src.utils.state import StateManager
 from src.ingest.orders import ingest_orders
 from src.ingest.customers import ingest_customers
-from src.ingest.products import ingest_products
+from src.ingest.products import ingest_products, WATERMARK_KEY
 from src.transform.silver import (
     build_silver_orders,
     build_silver_customers,
@@ -45,6 +45,7 @@ def run_one_date(date_str: str, config: Config) -> dict:
                            "duration_sec": (datetime.utcnow() - t0).total_seconds()})
             raise
 
+    pending_watermark: str | None = None
     status, error_msg = "SUCCESS", None
     try:
         # ── Bronze ────────────────────────────────────────────────────────────
@@ -52,8 +53,13 @@ def run_one_date(date_str: str, config: Config) -> dict:
             date_str, config.landing_orders, config.bronze, logger))
         stage("ingest_customers", lambda: ingest_customers(
             config.landing_customers, config.bronze, logger))
-        stage("ingest_products",  lambda: ingest_products(
-            config.landing_products_db, config.bronze, state, logger))
+
+        def _run_ingest_products():
+            nonlocal pending_watermark
+            _, pending_watermark = ingest_products(
+                config.landing_products_db, config.bronze, state, logger)
+
+        stage("ingest_products", _run_ingest_products)
 
         # ── Silver ────────────────────────────────────────────────────────────
         stage("silver_orders",    lambda: build_silver_orders(
@@ -76,6 +82,14 @@ def run_one_date(date_str: str, config: Config) -> dict:
     except Exception as exc:
         status = "FAIL"
         error_msg = str(exc)
+
+    # Two-phase commit: only advance the watermark once every stage has succeeded.
+    # If any stage failed above, pending_watermark is either None or uncommitted —
+    # the next run will re-read the old watermark and re-ingest the missed window.
+    if status == "SUCCESS" and pending_watermark is not None:
+        state.set_watermark(WATERMARK_KEY, pending_watermark)
+        log_event(logger, "INFO", "products_watermark_advanced",
+                  new_watermark=pending_watermark)
 
     finished_at = datetime.utcnow()
     metadata = {

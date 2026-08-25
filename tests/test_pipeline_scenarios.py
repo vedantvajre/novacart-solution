@@ -1,15 +1,18 @@
 """
-14 tests covering the 7 required acceptance scenarios.
+16 tests covering the 7 required acceptance scenarios + H-1 watermark safety.
 Run with: pytest -v
 """
 from __future__ import annotations
 from pathlib import Path
+from unittest.mock import patch
 import pandas as pd
 import pytest
 
 from tests.conftest import write_orders_csv, write_customers_json, make_products_db
 from src.pipeline import run_one_date
 from src.utils.config import Config
+from src.ingest.products import WATERMARK_KEY
+from src.utils.state import StateManager
 
 
 DATE = "2025-11-07"
@@ -247,3 +250,52 @@ def test_backfill_equals_individual_runs(config: Config):
         p = config.gold / "fact_orders" / f"date={d}" / "data.parquet"
         df = pd.read_parquet(p)
         assert len(df) == 1
+
+
+# ── Scenario H-1: Watermark safety ───────────────────────────────────────────
+
+def test_watermark_not_advanced_on_downstream_failure(config: Config):
+    """Watermark must NOT be committed when a downstream stage fails after Bronze.
+
+    Silver quarantines bad rows rather than raising, so there is no natural
+    post-products-Bronze failure path. unittest.mock.patch is used here to
+    inject a controlled exception into build_silver_products, simulating the
+    exact H-1 failure mode without relying on implementation-specific bad data.
+    """
+    write_orders_csv(config.landing_orders, DATE, [
+        ["ORD-001","CUST-001","PROD-001",DATE,"2","49.99","shipped"],
+    ])
+    write_customers_json(config.landing_customers, [GOOD_CUSTOMER])
+    make_products_db(config.landing_products_db, [GOOD_PRODUCT])
+
+    with patch(
+        "src.pipeline.build_silver_products",
+        side_effect=RuntimeError("forced silver failure"),
+    ):
+        result = run_one_date(DATE, config)
+
+    assert result["status"] == "FAIL"
+    # Watermark must remain uncommitted — next run must re-ingest this window.
+    assert StateManager(config.state).get_watermark(WATERMARK_KEY) is None
+
+
+def test_failed_window_reingested_on_retry(config: Config):
+    """After a failed run, the next successful run re-ingests and commits the watermark."""
+    write_orders_csv(config.landing_orders, DATE, [
+        ["ORD-001","CUST-001","PROD-001",DATE,"2","49.99","shipped"],
+    ])
+    write_customers_json(config.landing_customers, [GOOD_CUSTOMER])
+    make_products_db(config.landing_products_db, [GOOD_PRODUCT])
+
+    # First run: products Bronze succeeds, Silver raises — watermark stays uncommitted.
+    with patch(
+        "src.pipeline.build_silver_products",
+        side_effect=RuntimeError("forced silver failure"),
+    ):
+        failed = run_one_date(DATE, config)
+    assert failed["status"] == "FAIL"
+
+    # Second run: no mock, full pipeline succeeds — products re-ingested, watermark committed.
+    result = run_one_date(DATE, config)
+    assert result["status"] == "SUCCESS"
+    assert StateManager(config.state).get_watermark(WATERMARK_KEY) == GOOD_PRODUCT[5]
