@@ -1,7 +1,8 @@
 """Watermark and run-state manager. Persists to JSON files in state/."""
+
 from __future__ import annotations
+
 import json
-from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -16,7 +17,7 @@ class StateManager:
     def get_watermark(self, source: str) -> str | None:
         if not self._watermark_file.exists():
             return None
-        data = json.loads(self._watermark_file.read_text())
+        data: dict[str, str] = json.loads(self._watermark_file.read_text())
         return data.get(source)
 
     def set_watermark(self, source: str, value: str) -> None:

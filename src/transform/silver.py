@@ -1,20 +1,21 @@
 """Bronze → Silver: validate with Pydantic, dedupe, quarantine bad rows."""
+
 from __future__ import annotations
+
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Type
 
 import pandas as pd
 from pydantic import BaseModel, ValidationError
 
 from src.utils.logging_setup import log_event
-from src.utils.schemas import OrderRow, CustomerRow, ProductRow
+from src.utils.schemas import CustomerRow, OrderRow, ProductRow
 
 
 def _validate_df(
     df: pd.DataFrame,
-    model: Type[BaseModel],
+    model: type[BaseModel],
     primary_key: str,
     quarantine_path: Path,
     logger: logging.Logger,
@@ -24,18 +25,18 @@ def _validate_df(
     good, bad = [], []
     for _, row in df.iterrows():
         try:
-            model(**row.to_dict())
+            model(**{str(k): v for k, v in row.to_dict().items()})
             good.append(row)
         except (ValidationError, Exception) as exc:
             row_dict = row.to_dict()
             row_dict["_quarantine_reason"] = str(exc)
-            row_dict["_quarantined_at"] = datetime.now(timezone.utc).isoformat()
+            row_dict["_quarantined_at"] = datetime.now(UTC).isoformat()
             bad.append(row_dict)
 
     if bad:
         q_dir = quarantine_path / source_name
         q_dir.mkdir(parents=True, exist_ok=True)
-        ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+        ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
         pd.DataFrame(bad).to_parquet(q_dir / f"{ts}.parquet", index=False)
         log_event(logger, "WARNING", f"{source_name}_quarantined", count=len(bad))
 

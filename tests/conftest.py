@@ -1,10 +1,14 @@
 """Shared pytest fixtures for NovaCart pipeline tests."""
+
 from __future__ import annotations
+
 import csv
 import json
 import sqlite3
 from pathlib import Path
+
 import pytest
+
 from src.utils.config import Config
 
 
@@ -12,29 +16,36 @@ from src.utils.config import Config
 def tmp_project(tmp_path: Path) -> Path:
     """Return a temp directory wired up as a minimal project root."""
     for d in [
-        "config", "data/landing/orders", "data/landing/customers",
-        "data/bronze", "data/silver", "data/gold",
-        "data/quarantine", "logs", "state",
+        "config",
+        "data/landing/orders",
+        "data/landing/customers",
+        "data/bronze",
+        "data/silver",
+        "data/gold",
+        "data/quarantine",
+        "logs",
+        "state",
     ]:
         (tmp_path / d).mkdir(parents=True, exist_ok=True)
 
     cfg = {
         "pipeline": {"name": "test"},
         "paths": {
-            "landing_orders":    "data/landing/orders",
+            "landing_orders": "data/landing/orders",
             "landing_customers": "data/landing/customers",
             "landing_products_db": "data/landing/products.db",
-            "bronze":     "data/bronze",
-            "silver":     "data/silver",
-            "gold":       "data/gold",
+            "bronze": "data/bronze",
+            "silver": "data/silver",
+            "gold": "data/gold",
             "quarantine": "data/quarantine",
-            "logs":       "logs",
-            "state":      "state",
+            "logs": "logs",
+            "state": "state",
         },
         "silver": {"min_order_amount": 0.0, "max_order_amount": 100000.0},
-        "gold":   {"scd2_track_fields": ["city", "country", "email"]},
+        "gold": {"scd2_track_fields": ["city", "country", "email"]},
     }
     import yaml
+
     (tmp_path / "config" / "pipeline.yaml").write_text(yaml.dump(cfg))
     return tmp_path
 
@@ -42,6 +53,7 @@ def tmp_project(tmp_path: Path) -> Path:
 @pytest.fixture()
 def config(tmp_project: Path) -> Config:
     import os
+
     old = os.getcwd()
     os.chdir(tmp_project)
     yield Config.load("config/pipeline.yaml")
@@ -49,7 +61,15 @@ def config(tmp_project: Path) -> Config:
 
 
 def write_orders_csv(orders_dir: Path, date_str: str, rows: list[list]) -> Path:
-    header = ["order_id","customer_id","product_id","order_date","quantity","unit_price","status"]
+    header = [
+        "order_id",
+        "customer_id",
+        "product_id",
+        "order_date",
+        "quantity",
+        "unit_price",
+        "status",
+    ]
     path = orders_dir / f"orders_{date_str}.csv"
     with path.open("w", newline="") as f:
         w = csv.writer(f)
