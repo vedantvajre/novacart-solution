@@ -26,11 +26,14 @@ def _validate_df(
         try:
             model(**row.to_dict())
             good.append(row)
-        except (ValidationError, Exception) as exc:
+        except ValidationError as exc:
             row_dict = row.to_dict()
             row_dict["_quarantine_reason"] = str(exc)
             row_dict["_quarantined_at"] = datetime.now(timezone.utc).isoformat()
             bad.append(row_dict)
+        except Exception as exc:
+            logger.error("Unexpected error during validation", exc_info=True)
+            raise
 
     if bad:
         q_dir = quarantine_path / source_name
