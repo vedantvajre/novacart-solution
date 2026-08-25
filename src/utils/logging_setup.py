@@ -10,13 +10,18 @@ def get_logger(name: str, log_dir: Path) -> logging.Logger:
     log_dir.mkdir(parents=True, exist_ok=True)
     logger = logging.getLogger(name)
     logger.setLevel(logging.DEBUG)
-    if not logger.handlers:
-        fh = logging.FileHandler(log_dir / "pipeline.jsonl")
-        fh.setFormatter(_JsonFormatter())
-        logger.addHandler(fh)
-        sh = logging.StreamHandler()
-        sh.setLevel(logging.INFO)
-        logger.addHandler(sh)
+
+    for h in logger.handlers[:]:
+        h.close()
+        logger.removeHandler(h)
+
+    fh = logging.FileHandler(log_dir / "pipeline.jsonl")
+    fh.setFormatter(_JsonFormatter())
+    logger.addHandler(fh)
+    sh = logging.StreamHandler()
+    sh.setLevel(logging.INFO)
+    logger.addHandler(sh)
+
     return logger
 
 
