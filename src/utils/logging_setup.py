@@ -1,8 +1,9 @@
 """Structured JSON logging setup."""
 from __future__ import annotations
+
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 
@@ -22,7 +23,7 @@ def get_logger(name: str, log_dir: Path) -> logging.Logger:
 
 def log_event(logger: logging.Logger, level: str, event: str, **kwargs):
     payload = {
-        "ts": datetime.now(timezone.utc).isoformat(),
+        "ts": datetime.now(UTC).isoformat(),
         "event": event,
         **kwargs,
     }

@@ -1,9 +1,12 @@
 """Unit tests for Pydantic schema contracts."""
 from __future__ import annotations
+
 from datetime import date
+
 import pytest
 from pydantic import ValidationError
-from src.utils.schemas import OrderRow, CustomerRow, ProductRow
+
+from src.utils.schemas import CustomerRow, OrderRow, ProductRow
 
 
 class TestOrderRow:

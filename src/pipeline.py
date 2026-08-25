@@ -5,27 +5,28 @@ Usage:
     python -m src.pipeline --date 2025-11-10 --backfill 3
 """
 from __future__ import annotations
+
 import argparse
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from src.ingest.customers import ingest_customers
+from src.ingest.orders import ingest_orders
+from src.ingest.products import WATERMARK_KEY, ingest_products
+from src.transform.gold import (
+    build_dim_customer,
+    build_dim_product,
+    build_fact_orders,
+)
+from src.transform.silver import (
+    build_silver_customers,
+    build_silver_orders,
+    build_silver_products,
+)
 from src.utils.config import Config
 from src.utils.logging_setup import get_logger, log_event
 from src.utils.state import StateManager
-from src.ingest.orders import ingest_orders
-from src.ingest.customers import ingest_customers
-from src.ingest.products import ingest_products, WATERMARK_KEY
-from src.transform.silver import (
-    build_silver_orders,
-    build_silver_customers,
-    build_silver_products,
-)
-from src.transform.gold import (
-    build_dim_product,
-    build_dim_customer,
-    build_fact_orders,
-)
 
 
 def run_one_date(date_str: str, config: Config) -> dict:

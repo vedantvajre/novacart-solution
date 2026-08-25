@@ -3,17 +3,17 @@
 Run with: pytest -v
 """
 from __future__ import annotations
-from pathlib import Path
+
 from unittest.mock import patch
+
 import pandas as pd
 import pytest
 
-from tests.conftest import write_orders_csv, write_customers_json, make_products_db
+from src.ingest.products import WATERMARK_KEY
 from src.pipeline import run_one_date
 from src.utils.config import Config
-from src.ingest.products import WATERMARK_KEY
 from src.utils.state import StateManager
-
+from tests.conftest import make_products_db, write_customers_json, write_orders_csv
 
 DATE = "2025-11-07"
 
@@ -309,8 +309,8 @@ def test_products_bronze_creates_new_partition_each_run(config: Config):
     The second run uses a new product row with a later updated_at so the
     watermark (advanced by run 1 via the H-1 fix) does not skip it.
     """
-    PRODUCT_1 = ("PROD-001", "Widget", "Electronics", 10.0, "SUP-A", "2025-01-01T00:00:00")
-    PRODUCT_2 = ("PROD-002", "Gadget", "Electronics", 20.0, "SUP-A", "2025-06-01T00:00:00")
+    product_1 = ("PROD-001", "Widget", "Electronics", 10.0, "SUP-A", "2025-01-01T00:00:00")
+    product_2 = ("PROD-002", "Gadget", "Electronics", 20.0, "SUP-A", "2025-06-01T00:00:00")
 
     write_orders_csv(config.landing_orders, DATE, [
         ["ORD-001","CUST-001","PROD-001",DATE,"2","49.99","shipped"],
@@ -318,12 +318,12 @@ def test_products_bronze_creates_new_partition_each_run(config: Config):
     write_customers_json(config.landing_customers, [GOOD_CUSTOMER])
 
     # Run 1: one product row
-    make_products_db(config.landing_products_db, [PRODUCT_1])
+    make_products_db(config.landing_products_db, [product_1])
     result1 = run_one_date(DATE, config)
     assert result1["status"] == "SUCCESS"
 
     # Run 2: rebuild DB with a second product row that postdates the watermark
-    make_products_db(config.landing_products_db, [PRODUCT_1, PRODUCT_2])
+    make_products_db(config.landing_products_db, [product_1, product_2])
     result2 = run_one_date(DATE, config)
     assert result2["status"] == "SUCCESS"
 

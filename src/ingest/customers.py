@@ -1,15 +1,16 @@
 """Ingest customers nested JSON → Bronze parquet."""
 from __future__ import annotations
+
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pandas as pd
 
+from src.transform.schema_check import check_schema
 from src.utils.exceptions import IngestionError
 from src.utils.logging_setup import log_event
-from src.transform.schema_check import check_schema
 
 EXPECTED_COLUMNS = [
     "customer_id", "first_name", "last_name", "email",
@@ -43,7 +44,7 @@ def ingest_customers(
     check_schema(list(df.columns), EXPECTED_COLUMNS, "customers", logger)
 
     df["_source_file"] = src.name
-    df["_ingested_at"] = datetime.now(timezone.utc).isoformat()
+    df["_ingested_at"] = datetime.now(UTC).isoformat()
 
     out_dir = bronze_dir / "customers"
     out_dir.mkdir(parents=True, exist_ok=True)

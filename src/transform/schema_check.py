@@ -1,6 +1,8 @@
 """Schema drift detection: additive drift warns, subtractive drift raises."""
 from __future__ import annotations
+
 import logging
+
 from src.utils.exceptions import SchemaError
 
 

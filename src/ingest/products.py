@@ -1,16 +1,17 @@
 """Ingest products from SQLite with watermark-based incremental loading → Bronze parquet."""
 from __future__ import annotations
+
 import logging
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pandas as pd
 
+from src.transform.schema_check import check_schema
 from src.utils.exceptions import IngestionError
 from src.utils.logging_setup import log_event
 from src.utils.state import StateManager
-from src.transform.schema_check import check_schema
 
 EXPECTED_COLUMNS = [
     "product_id", "name", "category", "unit_cost", "supplier_id", "updated_at",
@@ -57,9 +58,9 @@ def ingest_products(
 
     check_schema(list(df.columns), EXPECTED_COLUMNS, "products", logger)
 
-    df["_ingested_at"] = datetime.now(timezone.utc).isoformat()
+    df["_ingested_at"] = datetime.now(UTC).isoformat()
 
-    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%f")
+    ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%f")
     out_dir = bronze_dir / "products" / f"ingested_at={ts}"
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / "data.parquet"

@@ -1,8 +1,9 @@
 """Pydantic schema contracts for Bronze → Silver validation."""
 from __future__ import annotations
+
 from datetime import date
-from typing import Optional
-from pydantic import BaseModel, field_validator, ConfigDict
+
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 class OrderRow(BaseModel):
@@ -47,7 +48,7 @@ class CustomerRow(BaseModel):
     city: str
     country: str
     signup_date: date
-    tier: Optional[str] = "standard"
+    tier: str | None = "standard"
 
     @field_validator("email")
     @classmethod

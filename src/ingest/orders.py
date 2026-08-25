@@ -1,14 +1,15 @@
 """Ingest daily orders CSV → Bronze parquet."""
 from __future__ import annotations
+
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pandas as pd
 
+from src.transform.schema_check import check_schema
 from src.utils.exceptions import IngestionError
 from src.utils.logging_setup import log_event
-from src.transform.schema_check import check_schema
 
 EXPECTED_COLUMNS = [
     "order_id", "customer_id", "product_id",
@@ -34,7 +35,7 @@ def ingest_orders(
 
     # Add Bronze metadata
     df["_source_file"] = src.name
-    df["_ingested_at"] = datetime.now(timezone.utc).isoformat()
+    df["_ingested_at"] = datetime.now(UTC).isoformat()
     df["_partition_date"] = date_str
 
     out_dir = bronze_dir / "orders" / f"date={date_str}"

@@ -1,6 +1,8 @@
 """Config loader — reads pipeline.yaml and exposes typed paths."""
 from __future__ import annotations
+
 from pathlib import Path
+
 import yaml
 
 
@@ -10,7 +12,7 @@ class Config:
         self.root = root
 
     @classmethod
-    def load(cls, path: str = "config/pipeline.yaml") -> "Config":
+    def load(cls, path: str = "config/pipeline.yaml") -> Config:
         p = Path(path)
         with p.open() as f:
             raw = yaml.safe_load(f)

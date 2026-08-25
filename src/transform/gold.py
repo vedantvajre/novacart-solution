@@ -1,8 +1,9 @@
 """Silver → Gold: SCD Type 1 & 2 dimensions + idempotent fact_orders."""
 from __future__ import annotations
+
 import hashlib
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pandas as pd
@@ -36,7 +37,7 @@ def build_dim_product(
     df = pd.read_parquet(src)
     # SCD1 — just keep latest snapshot; drop internal columns
     df = df[[c for c in df.columns if not c.startswith("_")]].copy()
-    df["_updated_at"] = datetime.now(timezone.utc).isoformat()
+    df["_updated_at"] = datetime.now(UTC).isoformat()
 
     df.to_parquet(out_path, index=False)
     log_event(logger, "INFO", "dim_product_written", rows=len(df))
@@ -62,7 +63,7 @@ def build_dim_customer(
 
     incoming = pd.read_parquet(src)
     incoming = incoming[[c for c in incoming.columns if not c.startswith("_")]].copy()
-    today = datetime.now(timezone.utc).date().isoformat()
+    today = datetime.now(UTC).date().isoformat()
 
     if not out_path.exists():
         # First load — open all rows
@@ -77,7 +78,7 @@ def build_dim_customer(
         return out_path
 
     existing = pd.read_parquet(out_path)
-    current = existing[existing["_current"] == True].copy()
+    current = existing[existing["_current"]].copy()
 
     updated_rows, new_rows = [], []
 
