@@ -180,15 +180,15 @@ class TestOrderRow:
     """
 
     def _valid(self, **overrides):
-        base = dict(
-            order_id="ORD-1",
-            customer_id="C1",
-            product_id="P1",
-            order_date=date(2025, 1, 1),
-            quantity=2,
-            unit_price=9.99,
-            status="shipped",
-        )
+        base = {
+            "order_id": "ORD-1",
+            "customer_id": "C1",
+            "product_id": "P1",
+            "order_date": date(2025, 1, 1),
+            "quantity": 2,
+            "unit_price": 9.99,
+            "status": "shipped",
+        }
         base.update(overrides)
         return base
 
@@ -239,16 +239,16 @@ class TestCustomerRow:
     """Tests for L{CustomerRow} (Silver)."""
 
     def _valid(self, **overrides):
-        base = dict(
-            customer_id="C1",
-            first_name="Alice",
-            last_name="Smith",
-            email="alice@example.com",
-            city="NYC",
-            country="US",
-            signup_date=date(2024, 1, 1),
-            tier="gold",
-        )
+        base = {
+            "customer_id": "C1",
+            "first_name": "Alice",
+            "last_name": "Smith",
+            "email": "alice@example.com",
+            "city": "NYC",
+            "country": "US",
+            "signup_date": date(2024, 1, 1),
+            "tier": "gold",
+        }
         base.update(overrides)
         return base
 
@@ -262,7 +262,9 @@ class TestCustomerRow:
         L{CustomerRow} must inherit every field declared in
         L{BronzeCustomerRow}.
         """
-        assert set(BronzeCustomerRow.model_fields).issubset(set(CustomerRow.model_fields))
+        assert set(BronzeCustomerRow.model_fields).issubset(
+            set(CustomerRow.model_fields)
+        )
 
     def test_email_domain_normalised_to_lowercase(self):
         """
@@ -350,14 +352,14 @@ class TestProductRow:
     """Tests for L{ProductRow} (Silver)."""
 
     def _valid(self, **overrides):
-        base = dict(
-            product_id="P1",
-            name="Widget",
-            category="Electronics",
-            unit_cost=10.0,
-            supplier_id="SUP-A",
-            updated_at="2025-01-01T00:00:00",
-        )
+        base = {
+            "product_id": "P1",
+            "name": "Widget",
+            "category": "Electronics",
+            "unit_cost": 10.0,
+            "supplier_id": "SUP-A",
+            "updated_at": "2025-01-01T00:00:00",
+        }
         base.update(overrides)
         return base
 

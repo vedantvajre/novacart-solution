@@ -57,7 +57,9 @@ class GoldConfig:
                              C{["city", "country", "email"]}.
     """
 
-    scd2_track_fields: list[str] = field(default_factory=lambda: ["city", "country", "email"])
+    scd2_track_fields: list[str] = field(
+        default_factory=lambda: ["city", "country", "email"]
+    )
 
     @classmethod
     def from_dict(cls, raw: dict[str, object]) -> GoldConfig:

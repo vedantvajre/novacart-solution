@@ -72,21 +72,18 @@ _FACT_ORDERS_SCHEMA: dict[str, type] = {
 
 def _row_hash(row: pd.Series, fields: list[str]) -> str:
     """
-    Compute a deterministic MD5 hex digest over a sorted subset of row fields.
+    Compute a deterministic SHA-256 hex digest over a sorted subset of row fields.
 
     Fields are sorted before hashing to ensure consistent results regardless
-    of DataFrame column order.
-
-    Note: MD5 is used here solely as a fast change-detection fingerprint,
-    not for cryptographic security.  Collision risk for SCD2 change detection
-    is tracked under H-4.
+    of DataFrame column order.  SHA-256 replaces MD5 (H-4) to meet IBM
+    security policy which prohibits MD5 for any hashing purpose.
 
     @param row:    A pandas Series representing one customer row.
     @param fields: Column names whose values contribute to the hash.
-    @return: Lowercase hexadecimal MD5 digest string.
+    @return: Lowercase hexadecimal SHA-256 digest string.
     """
     val = "|".join(str(row.get(f, "")) for f in sorted(fields))
-    return hashlib.md5(val.encode()).hexdigest()
+    return hashlib.sha256(val.encode()).hexdigest()
 
 
 # ── dim_product: SCD Type 1 (overwrite) ──────────────────────────────────────
@@ -183,63 +180,50 @@ def build_dim_customer(
         incoming["_eff_start"] = today
         incoming["_eff_end"] = _HIGH_DATE
         incoming["_current"] = True
-        incoming["_row_hash"] = incoming.apply(lambda r: _row_hash(r, scd2_fields), axis=1)
+        incoming["_row_hash"] = incoming.apply(
+            lambda r: _row_hash(r, scd2_fields), axis=1
+        )
         assert_gold_schema(incoming, _DIM_CUSTOMER_SCHEMA, "dim_customer")
         incoming.to_parquet(out_path, index=False)
         log_event(logger, "INFO", "dim_customer_initial_load", rows=len(incoming))
         return out_path
 
     existing = pd.read_parquet(out_path)
-    current = existing[existing["_current"]].copy()
+    current = existing[existing["_current"]][["customer_id", "_row_hash"]].copy()
 
-    updated_rows: list[dict] = []
-    new_rows: list[dict] = []
+    # Compute hashes for all incoming rows in one vectorised pass (H-6).
+    incoming["_new_hash"] = incoming.apply(lambda r: _row_hash(r, scd2_fields), axis=1)
 
-    for _, inc_row in incoming.iterrows():
-        cid = inc_row["customer_id"]
-        new_hash = _row_hash(inc_row, scd2_fields)
-        match = current[current["customer_id"] == cid]
+    # Single O(n log n) join replaces O(n×m) per-row filter loop (H-6).
+    merged = incoming.merge(current, on="customer_id", how="left")
 
-        if match.empty:
-            # Brand-new customer
-            r = inc_row.to_dict()
-            r.update(
-                {
-                    "_eff_start": today,
-                    "_eff_end": _HIGH_DATE,
-                    "_current": True,
-                    "_row_hash": new_hash,
-                }
-            )
-            new_rows.append(r)
-        elif match.iloc[0]["_row_hash"] != new_hash:
-            # SCD2 — expire old row, open new row
-            old_idx = match.index[0]
-            existing.at[old_idx, "_eff_end"] = today
-            existing.at[old_idx, "_current"] = False
+    brand_new = merged["_row_hash"].isna()
+    changed = ~brand_new & (merged["_new_hash"] != merged["_row_hash"])
 
-            r = inc_row.to_dict()
-            r.update(
-                {
-                    "_eff_start": today,
-                    "_eff_end": _HIGH_DATE,
-                    "_current": True,
-                    "_row_hash": new_hash,
-                }
-            )
-            new_rows.append(r)
-        # else: unchanged — keep existing row as-is
+    # Expire changed rows in existing via vectorised mask — no per-row .at[] (H-6).
+    changed_ids = merged.loc[changed, "customer_id"].values
+    expire_mask = existing["customer_id"].isin(changed_ids) & existing["_current"]
+    existing.loc[expire_mask, "_eff_end"] = today
+    existing.loc[expire_mask, "_current"] = False
+
+    # Build new/replacement rows for brand-new and changed customers.
+    to_open = merged.loc[brand_new | changed].copy()
+    to_open["_eff_start"] = today
+    to_open["_eff_end"] = _HIGH_DATE
+    to_open["_current"] = True
+    to_open["_row_hash"] = to_open["_new_hash"]
+    to_open = to_open.drop(columns=["_new_hash"])
 
     frames = [existing]
-    if updated_rows:
-        frames.append(pd.DataFrame(updated_rows))
-    if new_rows:
-        frames.append(pd.DataFrame(new_rows))
+    if not to_open.empty:
+        frames.append(to_open)
 
     result = pd.concat(frames, ignore_index=True)
     assert_gold_schema(result, _DIM_CUSTOMER_SCHEMA, "dim_customer")
     result.to_parquet(out_path, index=False)
-    log_event(logger, "INFO", "dim_customer_written", rows=len(result), new=len(new_rows))
+    log_event(
+        logger, "INFO", "dim_customer_written", rows=len(result), new=len(to_open)
+    )
     return out_path
 
 

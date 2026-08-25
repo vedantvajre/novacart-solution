@@ -25,7 +25,14 @@ GOOD_CUSTOMER = {
     "signup_date": "2024-01-01",
     "tier": "gold",
 }
-GOOD_PRODUCT = ("PROD-001", "Widget", "Electronics", 10.0, "SUP-A", "2025-01-01T00:00:00")
+GOOD_PRODUCT = (
+    "PROD-001",
+    "Widget",
+    "Electronics",
+    10.0,
+    "SUP-A",
+    "2025-01-01T00:00:00",
+)
 
 
 # ── Scenario 1: Happy path ────────────────────────────────────────────────────
@@ -47,7 +54,9 @@ def test_happy_path_fact_rows(config: Config):
     result = run_one_date(DATE, config)
     assert result["status"] == "SUCCESS"
 
-    fact = pd.read_parquet(config.gold / "fact_orders" / f"date={DATE}" / "data.parquet")
+    fact = pd.read_parquet(
+        config.gold / "fact_orders" / f"date={DATE}" / "data.parquet"
+    )
     assert len(fact) == 3
 
 
@@ -63,7 +72,9 @@ def test_happy_path_total_amount_calculated(config: Config):
     make_products_db(config.landing_products_db, [GOOD_PRODUCT])
 
     run_one_date(DATE, config)
-    fact = pd.read_parquet(config.gold / "fact_orders" / f"date={DATE}" / "data.parquet")
+    fact = pd.read_parquet(
+        config.gold / "fact_orders" / f"date={DATE}" / "data.parquet"
+    )
     assert fact.iloc[0]["total_amount"] == pytest.approx(100.0)
 
 
@@ -76,14 +87,24 @@ def test_duplicates_collapsed(config: Config):
         DATE,
         [
             ["ORD-001", "CUST-001", "PROD-001", DATE, "2", "49.99", "shipped"],
-            ["ORD-001", "CUST-001", "PROD-001", DATE, "2", "49.99", "shipped"],  # duplicate
+            [
+                "ORD-001",
+                "CUST-001",
+                "PROD-001",
+                DATE,
+                "2",
+                "49.99",
+                "shipped",
+            ],  # duplicate
         ],
     )
     write_customers_json(config.landing_customers, [GOOD_CUSTOMER])
     make_products_db(config.landing_products_db, [GOOD_PRODUCT])
 
     run_one_date(DATE, config)
-    fact = pd.read_parquet(config.gold / "fact_orders" / f"date={DATE}" / "data.parquet")
+    fact = pd.read_parquet(
+        config.gold / "fact_orders" / f"date={DATE}" / "data.parquet"
+    )
     assert len(fact) == 1
 
 
@@ -93,7 +114,15 @@ def test_duplicates_keep_last_value(config: Config):
         DATE,
         [
             ["ORD-001", "CUST-001", "PROD-001", DATE, "2", "49.99", "shipped"],
-            ["ORD-001", "CUST-001", "PROD-001", DATE, "5", "49.99", "shipped"],  # updated qty
+            [
+                "ORD-001",
+                "CUST-001",
+                "PROD-001",
+                DATE,
+                "5",
+                "49.99",
+                "shipped",
+            ],  # updated qty
         ],
     )
     write_customers_json(config.landing_customers, [GOOD_CUSTOMER])
@@ -113,7 +142,15 @@ def test_bad_rows_quarantined(config: Config):
         DATE,
         [
             ["ORD-001", "CUST-001", "PROD-001", DATE, "2", "49.99", "shipped"],  # good
-            ["ORD-002", "CUST-001", "PROD-001", DATE, "0", "49.99", "shipped"],  # bad qty
+            [
+                "ORD-002",
+                "CUST-001",
+                "PROD-001",
+                DATE,
+                "0",
+                "49.99",
+                "shipped",
+            ],  # bad qty
         ],
     )
     write_customers_json(config.landing_customers, [GOOD_CUSTOMER])
@@ -132,14 +169,24 @@ def test_bad_rows_dont_reach_gold(config: Config):
         DATE,
         [
             ["ORD-001", "CUST-001", "PROD-001", DATE, "2", "49.99", "shipped"],
-            ["ORD-002", "CUST-001", "PROD-001", DATE, "-1", "49.99", "shipped"],  # negative qty
+            [
+                "ORD-002",
+                "CUST-001",
+                "PROD-001",
+                DATE,
+                "-1",
+                "49.99",
+                "shipped",
+            ],  # negative qty
         ],
     )
     write_customers_json(config.landing_customers, [GOOD_CUSTOMER])
     make_products_db(config.landing_products_db, [GOOD_PRODUCT])
 
     run_one_date(DATE, config)
-    fact = pd.read_parquet(config.gold / "fact_orders" / f"date={DATE}" / "data.parquet")
+    fact = pd.read_parquet(
+        config.gold / "fact_orders" / f"date={DATE}" / "data.parquet"
+    )
     assert len(fact) == 1
 
 
@@ -163,7 +210,18 @@ def test_additive_drift_succeeds(config: Config):
                 "new_mystery_column",
             ]
         )
-        w.writerow(["ORD-001", "CUST-001", "PROD-001", DATE, "2", "49.99", "shipped", "surprise"])
+        w.writerow(
+            [
+                "ORD-001",
+                "CUST-001",
+                "PROD-001",
+                DATE,
+                "2",
+                "49.99",
+                "shipped",
+                "surprise",
+            ]
+        )
     write_customers_json(config.landing_customers, [GOOD_CUSTOMER])
     make_products_db(config.landing_products_db, [GOOD_PRODUCT])
 
@@ -187,12 +245,16 @@ def test_additive_drift_data_still_lands(config: Config):
                 "extra_col",
             ]
         )
-        w.writerow(["ORD-001", "CUST-001", "PROD-001", DATE, "2", "49.99", "shipped", "x"])
+        w.writerow(
+            ["ORD-001", "CUST-001", "PROD-001", DATE, "2", "49.99", "shipped", "x"]
+        )
     write_customers_json(config.landing_customers, [GOOD_CUSTOMER])
     make_products_db(config.landing_products_db, [GOOD_PRODUCT])
 
     run_one_date(DATE, config)
-    fact = pd.read_parquet(config.gold / "fact_orders" / f"date={DATE}" / "data.parquet")
+    fact = pd.read_parquet(
+        config.gold / "fact_orders" / f"date={DATE}" / "data.parquet"
+    )
     assert len(fact) == 1
 
 
@@ -205,7 +267,16 @@ def test_subtractive_drift_fails(config: Config):
     with path.open("w", newline="") as f:
         w = csv.writer(f)
         # unit_price is missing
-        w.writerow(["order_id", "customer_id", "product_id", "order_date", "quantity", "status"])
+        w.writerow(
+            [
+                "order_id",
+                "customer_id",
+                "product_id",
+                "order_date",
+                "quantity",
+                "status",
+            ]
+        )
         w.writerow(["ORD-001", "CUST-001", "PROD-001", DATE, "2", "shipped"])
     write_customers_json(config.landing_customers, [GOOD_CUSTOMER])
     make_products_db(config.landing_products_db, [GOOD_PRODUCT])
@@ -243,10 +314,14 @@ def test_idempotency_same_row_count(config: Config):
     make_products_db(config.landing_products_db, [GOOD_PRODUCT])
 
     run_one_date(DATE, config)
-    fact1 = pd.read_parquet(config.gold / "fact_orders" / f"date={DATE}" / "data.parquet")
+    fact1 = pd.read_parquet(
+        config.gold / "fact_orders" / f"date={DATE}" / "data.parquet"
+    )
 
     run_one_date(DATE, config)
-    fact2 = pd.read_parquet(config.gold / "fact_orders" / f"date={DATE}" / "data.parquet")
+    fact2 = pd.read_parquet(
+        config.gold / "fact_orders" / f"date={DATE}" / "data.parquet"
+    )
 
     assert len(fact1) == len(fact2)
 
@@ -263,10 +338,14 @@ def test_idempotency_same_values(config: Config):
     make_products_db(config.landing_products_db, [GOOD_PRODUCT])
 
     run_one_date(DATE, config)
-    fact1 = pd.read_parquet(config.gold / "fact_orders" / f"date={DATE}" / "data.parquet")
+    fact1 = pd.read_parquet(
+        config.gold / "fact_orders" / f"date={DATE}" / "data.parquet"
+    )
 
     run_one_date(DATE, config)
-    fact2 = pd.read_parquet(config.gold / "fact_orders" / f"date={DATE}" / "data.parquet")
+    fact2 = pd.read_parquet(
+        config.gold / "fact_orders" / f"date={DATE}" / "data.parquet"
+    )
 
     pd.testing.assert_frame_equal(
         fact1.sort_values("order_id").reset_index(drop=True),
@@ -291,7 +370,9 @@ def test_backfill_all_dates_present(config: Config):
 
     from src.pipeline import main
 
-    main(["--date", "2025-11-09", "--backfill", "2", "--config", "config/pipeline.yaml"])
+    main(
+        ["--date", "2025-11-09", "--backfill", "2", "--config", "config/pipeline.yaml"]
+    )
 
     for d in ["2025-11-07", "2025-11-08", "2025-11-09"]:
         p = config.gold / "fact_orders" / f"date={d}" / "data.parquet"
@@ -312,7 +393,9 @@ def test_backfill_equals_individual_runs(config: Config):
 
     from src.pipeline import main
 
-    main(["--date", "2025-11-08", "--backfill", "1", "--config", "config/pipeline.yaml"])
+    main(
+        ["--date", "2025-11-08", "--backfill", "1", "--config", "config/pipeline.yaml"]
+    )
 
     for d in ["2025-11-07", "2025-11-08"]:
         p = config.gold / "fact_orders" / f"date={d}" / "data.parquet"

@@ -7,6 +7,21 @@ L{BronzeProductRow.model_fields}, making it the single source of truth for
 products structure.  The redundant C{EXPECTED_COLUMNS} list and the
 C{check_schema()} call have been removed; L{_assert_bronze_columns} replaces
 them with a one-line column-presence check.
+
+H-1 two-phase commit
+--------------------
+L{ingest_products} no longer calls C{state.set_watermark()} directly.  Instead
+it returns C{(out_path, pending_watermark)}.  The pipeline orchestrator
+(C{pipeline.py}) is responsible for committing the watermark to state only
+after every downstream stage (Silver and Gold) has succeeded.  This prevents
+data loss when a stage after Bronze succeeds but a later stage fails — the next
+run will re-read the old watermark and re-ingest the missed window.
+
+H-2 partitioned Bronze output
+------------------------------
+Each invocation writes to a unique C{products/ingested_at=<timestamp>/data.parquet}
+partition rather than overwriting a single C{products/data.parquet} file.  This
+preserves the full ingestion history for replay and audit.
 """
 
 from __future__ import annotations
@@ -68,35 +83,37 @@ def ingest_products(
     bronze_dir: Path,
     state: StateManager,
     logger: logging.Logger,
-) -> Path:
+) -> tuple[Path, str | None]:
     """
     Incrementally load only product rows newer than the stored watermark and
-    write them to the Bronze layer as a Parquet file.
+    write them to a timestamped Bronze partition (H-2).
 
-    The watermark (stored in C{StateManager} under key
-    C{products_updated_at}) is advanced to C{max(updated_at)} of the newly
-    ingested rows after a successful write.
+    Returns C{(out_path, pending_watermark)} without committing the watermark
+    to C{state} (H-1 two-phase commit).  The caller must call
+    C{state.set_watermark(WATERMARK_KEY, pending_watermark)} only after all
+    downstream pipeline stages have succeeded.
 
     Steps:
 
       1. Read the current watermark from C{state} (defaults to epoch).
       2. Query SQLite for rows with C{updated_at > watermark}.
-      3. Return early if no new rows are found.
+      3. Return C{(fallback_path, None)} early if no new rows are found.
       4. Assert column presence against L{BronzeProductRow.model_fields}.
       5. Attach the C{_ingested_at} metadata column.
-      6. Write to C{bronze_dir/products/data.parquet}.
-      7. Advance the watermark to C{max(updated_at)}.
+      6. Write to C{bronze_dir/products/ingested_at=<ts>/data.parquet} (H-2).
+      7. Return C{(out_path, new_watermark)} without advancing state.
 
     @param db_path:    Path to the SQLite database containing the
                        C{products} table.
     @param bronze_dir: Root directory for Bronze-layer Parquet output.
-    @param state:      L{StateManager} instance for reading and advancing
-                       the incremental watermark.
+    @param state:      L{StateManager} instance for reading the watermark.
+                       Watermark advancement is the caller's responsibility.
     @param logger:     Structured logger instance for this pipeline run.
     @raises IngestionError: If the SQLite database file does not exist.
     @raises SchemaError:    If required columns are missing from the query
                             result.
-    @return: Path to the written (or pre-existing) Bronze Parquet file.
+    @return: Tuple of C{(path_to_bronze_parquet, pending_watermark_or_None)}.
+             C{pending_watermark} is C{None} when there were no new rows.
     """
     if not db_path.exists():
         raise IngestionError(f"products DB not found: {db_path}")
@@ -120,19 +137,19 @@ def ingest_products(
         log_event(logger, "INFO", "products_no_new_rows")
         out_dir = bronze_dir / "products"
         out_dir.mkdir(parents=True, exist_ok=True)
-        return out_dir / "data.parquet"
+        return out_dir / "data.parquet", None
 
     _assert_bronze_columns(df, "products")
 
     df["_ingested_at"] = datetime.now(UTC).isoformat()
 
-    out_dir = bronze_dir / "products"
+    # H-2: unique partition per run preserves full Bronze history for replay/audit.
+    ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%f")
+    out_dir = bronze_dir / "products" / f"ingested_at={ts}"
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / "data.parquet"
     df.to_parquet(out_path, index=False)
 
     new_watermark = str(df["updated_at"].max())
-    state.set_watermark(WATERMARK_KEY, new_watermark)
-    log_event(logger, "INFO", "products_watermark_advanced", new_watermark=new_watermark)
-
-    return out_path
+    # H-1: do NOT commit watermark here — return it for two-phase commit in pipeline.py.
+    return out_path, new_watermark

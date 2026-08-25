@@ -369,12 +369,17 @@ def assert_gold_schema(
 
     missing = [col for col in expected if col not in df.columns]
     if missing:
-        raise SchemaError(f"[gold_schema] {table_name}: required columns missing {sorted(missing)}")
+        raise SchemaError(
+            f"[gold_schema] {table_name}: required columns missing {sorted(missing)}"
+        )
 
     type_errors: list[str] = []
     for col, expected_type in expected.items():
         actual_dtype = str(df[col].dtype)
-        if not any(actual_dtype.startswith(p) for p in dtype_map.get(expected_type, ("object",))):
+        if not any(
+            actual_dtype.startswith(p)
+            for p in dtype_map.get(expected_type, ("object",))
+        ):
             type_errors.append(
                 f"  {col}: expected {expected_type.__name__}, got dtype '{actual_dtype}'"
             )

@@ -21,17 +21,34 @@ def _validate_df(
     logger: logging.Logger,
     source_name: str,
 ) -> pd.DataFrame:
-    """Validate each row with Pydantic. Good rows → Silver, bad rows → quarantine."""
-    good, bad = [], []
-    for _, row in df.iterrows():
+    """Validate each row with Pydantic. Good rows → Silver, bad rows → quarantine.
+
+    Uses C{model.model_validate()} over a list comprehension rather than
+    C{iterrows()}, tracking good row indices and collecting bad row dicts only
+    on failure.  This avoids constructing a Python C{Series} object per row on
+    the happy path (H-5).
+
+    @param df:              Input DataFrame from the Bronze layer.
+    @param model:           Pydantic model class used to validate each row.
+    @param primary_key:     Column name used for deduplication.
+    @param quarantine_path: Root directory for quarantine Parquet output.
+    @param logger:          Structured logger instance.
+    @param source_name:     Label used in log events and quarantine sub-dir.
+    @return: Validated, deduplicated DataFrame ready for Silver output.
+    """
+    good_indices: list[int] = []
+    bad: list[dict] = []
+
+    records = df.to_dict(orient="records")
+    for i, record in enumerate(records):
         try:
-            model(**{str(k): v for k, v in row.to_dict().items()})
-            good.append(row)
-        except (ValidationError, Exception) as exc:
-            row_dict = row.to_dict()
-            row_dict["_quarantine_reason"] = str(exc)
-            row_dict["_quarantined_at"] = datetime.now(UTC).isoformat()
-            bad.append(row_dict)
+            model.model_validate(record)
+            good_indices.append(i)
+        except (ValidationError, Exception) as exc:  # noqa: BLE001
+            bad_record = record.copy()
+            bad_record["_quarantine_reason"] = str(exc)
+            bad_record["_quarantined_at"] = datetime.now(UTC).isoformat()
+            bad.append(bad_record)
 
     if bad:
         q_dir = quarantine_path / source_name
@@ -40,7 +57,11 @@ def _validate_df(
         pd.DataFrame(bad).to_parquet(q_dir / f"{ts}.parquet", index=False)
         log_event(logger, "WARNING", f"{source_name}_quarantined", count=len(bad))
 
-    result = pd.DataFrame(good) if good else pd.DataFrame(columns=df.columns)
+    result = (
+        df.iloc[good_indices].reset_index(drop=True)
+        if good_indices
+        else pd.DataFrame(columns=df.columns)
+    )
 
     # Deduplicate on primary key — keep last occurrence
     if primary_key in result.columns and not result.empty:
@@ -88,7 +109,9 @@ def build_silver_customers(
         return silver_dir / "customers" / "data.parquet"
 
     df = pd.read_parquet(src)
-    df = _validate_df(df, CustomerRow, "customer_id", quarantine_dir, logger, "customers")
+    df = _validate_df(
+        df, CustomerRow, "customer_id", quarantine_dir, logger, "customers"
+    )
 
     out_dir = silver_dir / "customers"
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -99,12 +122,24 @@ def build_silver_customers(
 
 
 def build_silver_products(
-    bronze_dir: Path,
+    bronze_src: Path,
     silver_dir: Path,
     quarantine_dir: Path,
     logger: logging.Logger,
 ) -> Path:
-    src = bronze_dir / "products" / "data.parquet"
+    """Build the Silver products table from a specific Bronze source path (H-2).
+
+    Accepts C{bronze_src} as a direct path rather than a directory so that
+    callers can pass the exact partitioned Bronze file returned by
+    C{ingest_products} (H-1 two-phase commit pattern).
+
+    @param bronze_src:    Exact path to the Bronze products Parquet file.
+    @param silver_dir:    Root directory for Silver-layer Parquet output.
+    @param quarantine_dir: Root directory for quarantine Parquet output.
+    @param logger:         Structured logger instance.
+    @return: Path to the written (or pre-existing) Silver Parquet file.
+    """
+    src = bronze_src
     if not src.exists():
         log_event(logger, "WARNING", "silver_products_no_bronze")
         return silver_dir / "products" / "data.parquet"
