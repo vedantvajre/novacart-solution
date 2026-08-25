@@ -29,11 +29,12 @@ def build_dim_product(
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / "dim_product.parquet"
 
-    if not src.exists() or pd.read_parquet(src).empty:
+    df = pd.read_parquet(src)
+
+    if not src.exists() or df.empty:
         log_event(logger, "INFO", "dim_product_skipped_no_data")
         return out_path
 
-    df = pd.read_parquet(src)
     # SCD1 — just keep latest snapshot; drop internal columns
     df = df[[c for c in df.columns if not c.startswith("_")]].copy()
     df["_updated_at"] = datetime.now(timezone.utc).isoformat()
