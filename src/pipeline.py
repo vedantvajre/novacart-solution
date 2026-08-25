@@ -46,6 +46,7 @@ def run_one_date(date_str: str, config: Config) -> dict:
             raise
 
     pending_watermark: str | None = None
+    products_bronze_path: Path | None = None
     status, error_msg = "SUCCESS", None
     try:
         # ── Bronze ────────────────────────────────────────────────────────────
@@ -55,8 +56,8 @@ def run_one_date(date_str: str, config: Config) -> dict:
             config.landing_customers, config.bronze, logger))
 
         def _run_ingest_products():
-            nonlocal pending_watermark
-            _, pending_watermark = ingest_products(
+            nonlocal pending_watermark, products_bronze_path
+            products_bronze_path, pending_watermark = ingest_products(
                 config.landing_products_db, config.bronze, state, logger)
 
         stage("ingest_products", _run_ingest_products)
@@ -67,7 +68,7 @@ def run_one_date(date_str: str, config: Config) -> dict:
         stage("silver_customers", lambda: build_silver_customers(
             config.bronze, config.silver, config.quarantine, logger))
         stage("silver_products",  lambda: build_silver_products(
-            config.bronze, config.silver, config.quarantine, logger))
+            products_bronze_path, config.silver, config.quarantine, logger))
 
         # ── Gold ──────────────────────────────────────────────────────────────
         stage("dim_product",   lambda: build_dim_product(

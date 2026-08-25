@@ -299,3 +299,35 @@ def test_failed_window_reingested_on_retry(config: Config):
     result = run_one_date(DATE, config)
     assert result["status"] == "SUCCESS"
     assert StateManager(config.state).get_watermark(WATERMARK_KEY) == GOOD_PRODUCT[5]
+
+
+# ── Scenario H-2: Products Bronze partitioning ───────────────────────────────
+
+def test_products_bronze_creates_new_partition_each_run(config: Config):
+    """Each run with new product rows must create a new timestamped partition.
+
+    The second run uses a new product row with a later updated_at so the
+    watermark (advanced by run 1 via the H-1 fix) does not skip it.
+    """
+    PRODUCT_1 = ("PROD-001", "Widget", "Electronics", 10.0, "SUP-A", "2025-01-01T00:00:00")
+    PRODUCT_2 = ("PROD-002", "Gadget", "Electronics", 20.0, "SUP-A", "2025-06-01T00:00:00")
+
+    write_orders_csv(config.landing_orders, DATE, [
+        ["ORD-001","CUST-001","PROD-001",DATE,"2","49.99","shipped"],
+    ])
+    write_customers_json(config.landing_customers, [GOOD_CUSTOMER])
+
+    # Run 1: one product row
+    make_products_db(config.landing_products_db, [PRODUCT_1])
+    result1 = run_one_date(DATE, config)
+    assert result1["status"] == "SUCCESS"
+
+    # Run 2: rebuild DB with a second product row that postdates the watermark
+    make_products_db(config.landing_products_db, [PRODUCT_1, PRODUCT_2])
+    result2 = run_one_date(DATE, config)
+    assert result2["status"] == "SUCCESS"
+
+    partitions = list((config.bronze / "products").glob("ingested_at=*"))
+    assert len(partitions) == 2, f"Expected 2 partitions, got {len(partitions)}"
+    for p in partitions:
+        assert (p / "data.parquet").exists(), f"Missing data.parquet in {p}"

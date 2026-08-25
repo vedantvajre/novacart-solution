@@ -98,12 +98,12 @@ def build_silver_customers(
 
 
 def build_silver_products(
-    bronze_dir: Path,
+    bronze_src: Path,
     silver_dir: Path,
     quarantine_dir: Path,
     logger: logging.Logger,
 ) -> Path:
-    src = bronze_dir / "products" / "data.parquet"
+    src = bronze_src
     if not src.exists():
         log_event(logger, "WARNING", "silver_products_no_bronze")
         return silver_dir / "products" / "data.parquet"

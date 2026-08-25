@@ -59,7 +59,8 @@ def ingest_products(
 
     df["_ingested_at"] = datetime.now(timezone.utc).isoformat()
 
-    out_dir = bronze_dir / "products"
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%f")
+    out_dir = bronze_dir / "products" / f"ingested_at={ts}"
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / "data.parquet"
     df.to_parquet(out_path, index=False)
