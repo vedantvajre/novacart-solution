@@ -150,6 +150,10 @@ def build_silver_products(
 
     df = _validate_df(df, ProductRow, "product_id", quarantine_dir, logger, "products")
 
+    # M-4: cast updated_at string from SQLite to datetime64 at the Silver boundary.
+    if "updated_at" in df.columns:
+        df["updated_at"] = pd.to_datetime(df["updated_at"], utc=True)
+
     out_dir = silver_dir / "products"
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / "data.parquet"

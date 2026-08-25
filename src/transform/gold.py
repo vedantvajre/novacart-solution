@@ -116,11 +116,15 @@ def build_dim_product(
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / "dim_product.parquet"
 
-    if not src.exists() or pd.read_parquet(src).empty:
+    if not src.exists():
         log_event(logger, "INFO", "dim_product_skipped_no_data")
         return out_path
 
     df = pd.read_parquet(src)
+    if df.empty:
+        log_event(logger, "INFO", "dim_product_skipped_no_data")
+        return out_path
+
     # SCD1 — keep the latest snapshot; strip internal pipeline columns
     df = df[[c for c in df.columns if not c.startswith("_")]].copy()
     df["_updated_at"] = datetime.now(UTC).isoformat()

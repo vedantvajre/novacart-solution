@@ -249,13 +249,15 @@ class ProductRow(BronzeProductRow):
     Inherits field names from L{BronzeProductRow} and narrows types.
 
     @ivar unit_cost:  Non-negative float (>= 0.0).
-    @ivar updated_at: Kept as C{str} (ISO timestamp from SQLite).
-                      Full C{datetime} typing is tracked under M-4.
+    @ivar updated_at: ISO-8601 timestamp parsed to C{datetime} at Silver (M-4).
+                      Pydantic coerces the string from Bronze to a proper
+                      C{datetime} object during validation.
     """
 
     model_config = ConfigDict(strict=False, coerce_numbers_to_str=False)
 
     unit_cost: float  # type: ignore[assignment]
+    updated_at: datetime  # type: ignore[assignment]
 
     @field_validator("unit_cost")
     @classmethod
