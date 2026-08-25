@@ -26,6 +26,7 @@ Each entity has models at two layers plus a Gold shape assertion helper::
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import Literal
 
 import pandas as pd
 from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
@@ -193,6 +194,11 @@ class OrderRow(BronzeOrderRow):
         return v.lower()
 
 
+#: Valid customer tier values.  Used in the C{Literal} annotation and
+#: exposed for use in tests and downstream code without importing C{CustomerRow}.
+VALID_TIERS = ("standard", "silver", "gold")
+
+
 class CustomerRow(BronzeCustomerRow):
     """
     Silver-layer contract for a validated customers row.
@@ -203,14 +209,37 @@ class CustomerRow(BronzeCustomerRow):
     @ivar email:       RFC-5322 compliant email address validated and
                        normalised to lowercase by Pydantic's C{EmailStr}
                        type.  Replaces the trivial C{@}-presence check.
-    @ivar tier:        Defaults to C{"standard"} when absent.
+    @ivar tier:        Must be one of C{"standard"}, C{"silver"}, or
+                       C{"gold"}.  Case is normalised to lowercase before
+                       the allowed-list check so that C{"Gold"} and
+                       C{"STANDARD"} are accepted.  Defaults to
+                       C{"standard"} when absent.
     """
 
     model_config = ConfigDict(strict=False, coerce_numbers_to_str=False)
 
     email: EmailStr
     signup_date: date  # type: ignore[assignment]
-    tier: str | None = "standard"
+    tier: Literal["standard", "silver", "gold"] | None = "standard"
+
+    @field_validator("tier", mode="before")
+    @classmethod
+    def normalise_tier(cls, v: object) -> object:
+        """
+        Lowercase the tier value before the C{Literal} allowed-list check.
+
+        Runs in C{before} mode so the normalised value is what Pydantic
+        validates against C{Literal["standard", "silver", "gold"]}.  Non-string
+        and C{None} values are passed through unchanged — Pydantic's own type
+        checking handles those cases.
+
+        @param v: Raw tier value from the source record.
+        @return: Lowercased string if C{v} is a non-empty C{str}, otherwise
+                 C{v} unchanged.
+        """
+        if isinstance(v, str):
+            return v.lower()
+        return v
 
 
 class ProductRow(BronzeProductRow):

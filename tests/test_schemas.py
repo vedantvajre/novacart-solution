@@ -305,6 +305,46 @@ class TestCustomerRow:
         row = CustomerRow(**data)
         assert row.tier == "standard"
 
+    @pytest.mark.parametrize("tier", ["standard", "silver", "gold"])
+    def test_valid_tiers_accepted(self, tier: str):
+        """
+        All three members of the allowed-list must be accepted.
+
+        @param tier: A valid tier value from C{VALID_TIERS}.
+        """
+        row = CustomerRow(**self._valid(tier=tier))
+        assert row.tier == tier
+
+    @pytest.mark.parametrize(
+        "raw, expected",
+        [
+            ("Gold", "gold"),
+            ("SILVER", "silver"),
+            ("Standard", "standard"),
+        ],
+    )
+    def test_tier_case_normalised(self, raw: str, expected: str):
+        """
+        Mixed-case tier values must be normalised to lowercase before
+        the allowed-list check, so C{"Gold"} and C{"SILVER"} are accepted.
+
+        @param raw:      Raw tier string as it might arrive from a CRM export.
+        @param expected: Expected normalised value stored in the Silver row.
+        """
+        row = CustomerRow(**self._valid(tier=raw))
+        assert row.tier == expected
+
+    @pytest.mark.parametrize("bad_tier", ["platinum", "VIP", "bronze", ""])
+    def test_invalid_tiers_rejected(self, bad_tier: str):
+        """
+        Values outside the allowed list must raise L{ValidationError} and
+        be quarantined rather than reaching Gold.
+
+        @param bad_tier: An invalid tier string.
+        """
+        with pytest.raises(ValidationError):
+            CustomerRow(**self._valid(tier=bad_tier))
+
 
 class TestProductRow:
     """Tests for L{ProductRow} (Silver)."""
