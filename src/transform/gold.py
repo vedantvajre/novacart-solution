@@ -14,7 +14,7 @@ _HIGH_DATE = "9999-12-31"
 
 def _row_hash(row: pd.Series, fields: list[str]) -> str:
     val = "|".join(str(row.get(f, "")) for f in sorted(fields))
-    return hashlib.md5(val.encode()).hexdigest()
+    return hashlib.sha256(val.encode()).hexdigest()
 
 
 # ── dim_product: SCD Type 1 (overwrite) ─────────────────────────────────────
