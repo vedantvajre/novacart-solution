@@ -79,7 +79,7 @@ def build_dim_customer(
     existing = pd.read_parquet(out_path)
     current = existing[existing["_current"] == True].copy()
 
-    updated_rows, new_rows = [], []
+    new_rows = []
 
     for _, inc_row in incoming.iterrows():
         cid = inc_row["customer_id"]
@@ -105,8 +105,6 @@ def build_dim_customer(
         # else: unchanged — keep existing row as-is
 
     frames = [existing]
-    if updated_rows:
-        frames.append(pd.DataFrame(updated_rows))
     if new_rows:
         frames.append(pd.DataFrame(new_rows))
 
