@@ -22,3 +22,8 @@ gold:
     - city
     - country
     - email
+
+notify:
+  slack_channel: "#novacart-pipeline"   # replace with your channel ID, e.g. C0123ABCDEF
+  watsonx_model_id: "ibm/granite-13b-instruct-v2"
+  watsonx_project_id: ""                # set here or via WATSONX_PROJECT_ID env var

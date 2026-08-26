@@ -4,3 +4,5 @@ pydantic>=2.0.0
 pyyaml>=6.0
 pytest>=7.4.0
 pytest-cov>=4.1.0
+slack-sdk>=3.27.0
+ibm-watsonx-ai>=1.1.0

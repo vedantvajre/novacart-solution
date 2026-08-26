@@ -6,6 +6,7 @@ Usage:
 """
 from __future__ import annotations
 import argparse
+import os
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -13,6 +14,8 @@ from pathlib import Path
 from src.utils.config import Config
 from src.utils.logging_setup import get_logger, log_event
 from src.utils.state import StateManager
+from src.utils.digest import build_digest
+from src.utils.slack_notify import send_digest
 from src.ingest.orders import ingest_orders
 from src.ingest.customers import ingest_customers
 from src.ingest.products import ingest_products
@@ -90,6 +93,30 @@ def run_one_date(date_str: str, config: Config) -> dict:
     state.record_run(metadata)
     log_event(logger, "INFO", "pipeline_end",
               **{k: v for k, v in metadata.items() if k != "stages"})
+
+    # ── Daily digest + Slack notification ─────────────────────────────────────
+    notify = config.notify_cfg
+    channel: str = notify.get("slack_channel", "")
+    model_id: str = notify.get("watsonx_model_id", "ibm/granite-13b-instruct-v2")
+    project_id: str = notify.get("watsonx_project_id", "") or os.environ.get("WATSONX_PROJECT_ID", "")
+
+    if channel:
+        try:
+            digest = build_digest(
+                run_metadata=metadata,
+                quarantine_dir=config.quarantine,
+                watsonx_model_id=model_id,
+                watsonx_project_id=project_id,
+                logger=logger,
+            )
+            send_digest(digest, channel)
+            log_event(logger, "INFO", "digest_sent", date=date_str, channel=channel)
+        except Exception as exc:
+            # Digest/Slack failure must never crash the pipeline
+            log_event(logger, "WARNING", "digest_failed", error=str(exc))
+    else:
+        log_event(logger, "INFO", "digest_skipped", reason="no slack_channel configured")
+
     return metadata
 
 
